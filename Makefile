@@ -14,8 +14,10 @@ CALICO   ?= $(DEVKITPRO)/calico
 
 # ARM7 side: stock libnds/calico ARM7 binary (audio will move here later).
 # Override on the command line if the auto-detect picks the wrong file.
-ARM7ELF  ?= $(firstword $(wildcard $(CALICO)/bin/ds7_maxmod.elf $(CALICO)/bin/ds7.elf $(LIBNDS)/default.elf))
-ICON     ?= $(firstword $(wildcard icon.bmp $(LIBNDS)/icon.bmp))
+ARM7ELF  ?= $(or $(firstword $(shell find $(DEVKITPRO) -name ds7_maxmod.elf 2>/dev/null)),\
+                 $(firstword $(shell find $(DEVKITPRO) -name 'ds7*.elf' 2>/dev/null)),\
+                 $(firstword $(shell find $(DEVKITPRO) -name default.elf 2>/dev/null)))
+ICON     ?= icon.bmp
 
 # DSi-mode header flags for ndstool (same ones TWiLight Menu++/nds-bootstrap use).
 DSI_FLAGS ?= -z 80040000 -u 00030004
@@ -38,6 +40,8 @@ $(TARGET).elf: $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@
 
 $(TARGET).nds: $(TARGET).elf
+	@test -n "$(ARM7ELF)" || (echo "ERROR: no ARM7 elf found under $(DEVKITPRO)"; exit 1)
+	@echo "ARM7: $(ARM7ELF)"
 	$(NDSTOOL) -c $@ -9 $< -7 $(ARM7ELF) -b $(ICON) "DSi SNES;SNES emulator;DSi only" \
 	        -g SNSD 01 "DSISNES" $(DSI_FLAGS)
 
