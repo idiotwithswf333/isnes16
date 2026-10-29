@@ -19,6 +19,9 @@ jobs:
           ls "$DEVKITPRO" || true
           ls "$DEVKITPRO/calico/lib" "$DEVKITPRO/calico/bin" "$DEVKITPRO/libnds" 2>/dev/null || true
 
+      - name: Find ARM7 binaries
+        run: find "$DEVKITPRO" -name 'ds7*.elf' -o -name 'default.elf' -o -name '*.arm7' | head -20
+
       - name: Build
         run: make -j2
         env:
