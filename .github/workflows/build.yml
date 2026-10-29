@@ -17,7 +17,7 @@ jobs:
       - name: Show toolchain layout (helps debug the first run)
         run: |
           ls "$DEVKITPRO" || true
-          ls "$DEVKITPRO/calico/bin" "$DEVKITPRO/libnds" 2>/dev/null || true
+          ls "$DEVKITPRO/calico/lib" "$DEVKITPRO/calico/bin" "$DEVKITPRO/libnds" 2>/dev/null || true
 
       - name: Build
         run: make -j2
