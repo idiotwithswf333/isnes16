@@ -30,4 +30,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dsisnes-nds
-          path: dsisnes.nds
+          path: |
+            dsisnes.nds
+            dsisnes_dsmode.nds
