@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <stdarg.h>
 
 #include "rom.h"
 
@@ -16,6 +17,50 @@
 #define NAME_LEN    96
 #define MAX_ROM     (8u * 1024 * 1024)   /* 48 Mbit ExHiROM is 6 MB; 8 MB cap */
 #define ROM_DIR     "sd:/roms"
+
+
+/* ---- breadcrumb log: sd:/dsisnes_log.txt ----------------------------------
+ * Lines are buffered until the SD card is mounted, then each line is appended
+ * and the file closed immediately, so the last line shows how far we got.
+ * (Cannot help if the program dies before the SD card is mounted.) */
+#define LOG_PATH "sd:/dsisnes_log.txt"
+static bool sd_ready;
+static char pending[2048];
+static size_t pending_len;
+
+static void dlog(const char *fmt, ...)
+{
+    char line[192];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(line, sizeof line - 2, fmt, ap);
+    va_end(ap);
+    if (n < 0) return;
+    if ((size_t)n > sizeof line - 3) n = sizeof line - 3;
+    line[n++] = '\n';
+    line[n] = 0;
+
+    if (!sd_ready) {
+        if (pending_len + (size_t)n < sizeof pending) {
+            memcpy(pending + pending_len, line, (size_t)n);
+            pending_len += (size_t)n;
+        }
+        return;
+    }
+    FILE *f = fopen(LOG_PATH, "a");
+    if (!f) return;
+    fwrite(line, 1, (size_t)n, f);
+    fclose(f);
+}
+
+static void log_sd_mounted(void)
+{
+    FILE *f = fopen(LOG_PATH, "w");   /* new file every run */
+    if (!f) return;
+    fwrite(pending, 1, pending_len, f);
+    fclose(f);
+    sd_ready = true;
+}
 
 static char files[MAX_FILES][NAME_LEN];
 static int  file_count;
@@ -31,6 +76,7 @@ static void wait_key(u32 mask)
 
 static void fatal(const char *msg)
 {
+    dlog("FATAL: %s", msg);
     consoleClear();
     iprintf("\x1b[31mError\x1b[39m\n\n%s\n\nPress START to exit.\n", msg);
     wait_key(KEY_START);
@@ -123,21 +169,34 @@ static u8 *load_file(const char *path, u32 *len_out)
 
 int main(void)
 {
-    consoleDemoInit();   /* console on the top screen */
+    /* Boot marker: if you see solid red, main() is running. */
+    videoSetMode(MODE_0_2D);
+    videoSetModeSub(MODE_0_2D);
+    BG_PALETTE[0] = RGB15(31, 0, 0);
+    BG_PALETTE_SUB[0] = RGB15(31, 0, 0);
 
+    consoleDemoInit();   /* console on the top screen */
+    dlog("main reached");
+
+    dlog("isDSiMode=%d", (int)isDSiMode());
     if (!isDSiMode()) {
         fatal("Not running in DSi mode.\n\nThis emulator needs the DSi's\n133 MHz CPU and 16 MB RAM.\nCheck the header/launch method.");
     }
 
     bool fast = setCpuClock(true);   /* 133 MHz ARM9 */
+    dlog("setCpuClock(true)=%d", (int)fast);
 
+    dlog("mounting SD");
     if (!fatInitDefault()) {
         fatal("Could not mount the SD card.");
     }
+    log_sd_mounted();
+    dlog("SD mounted");
 
     const char *dir = scan_dir();
     if (!dir) fatal("Could not open sd:/roms or sd:/.");
 
+    dlog("scan_dir: %s, %d files", dir, file_count);
     int sel = pick_rom(dir);
 
     char path[160];
@@ -146,6 +205,7 @@ int main(void)
     consoleClear();
     iprintf("Loading %s ...\n", files[sel]);
 
+    dlog("loading %s", path);
     u32 len = 0;
     u8 *raw = load_file(path, &len);
     if (!raw) fatal("Could not read ROM\n(too big or out of memory).");
@@ -156,6 +216,8 @@ int main(void)
         fatal("No valid SNES header found.");
     }
 
+    dlog("rom ok: size=%lu map=%02X chip=%s cksum=%d", (unsigned long)info.size,
+         info.map_mode, info.chip, (int)info.checksum_ok);
     consoleClear();
     iprintf("DSi SNES (skeleton)\n\n");
     iprintf("CPU: %s\n", fast ? "133 MHz" : "67 MHz");
@@ -175,6 +237,7 @@ int main(void)
     iprintf("[START] exit");
 
     wait_key(KEY_START);
+    dlog("exit requested");
     free(raw);
     exit(0);
     return 0;

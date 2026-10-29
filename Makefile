@@ -31,7 +31,7 @@ LDFLAGS  := -specs=$(CALICO)/share/ds9.specs -g $(ARCH) -Wl,-Map,$(TARGET).map
 LIBS     := -L$(LIBNDS)/lib -L$(CALICO)/lib -Wl,-u,__ds9_bootstub \
             -Wl,--start-group -lfat -lnds9 -lcalico_ds9 -Wl,--end-group
 
-all: $(TARGET).nds
+all: $(TARGET).nds $(TARGET)_dsmode.nds
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -45,7 +45,13 @@ $(TARGET).nds: $(TARGET).elf
 	$(NDSTOOL) -c $@ -9 $< -7 $(ARM7ELF) -b $(ICON) "DSi SNES;SNES emulator;DSi only" \
 	        -g SNSD 01 "DSISNES" $(DSI_FLAGS)
 
+# Diagnostic build: same code, plain DS header (no DSi flags). It should boot and
+# show the "Not running in DSi mode" message if the toolchain/ARM7 side is fine.
+$(TARGET)_dsmode.nds: $(TARGET).elf
+	$(NDSTOOL) -c $@ -9 $< -7 $(ARM7ELF) -b $(ICON) "DSi SNES;DS-mode test;" \
+	        -g SNSD 01 "DSISNES"
+
 clean:
-	rm -f $(OBJECTS) $(TARGET).elf $(TARGET).nds $(TARGET).map
+	rm -f $(OBJECTS) $(TARGET).elf $(TARGET).nds $(TARGET)_dsmode.nds $(TARGET).map
 
 .PHONY: all clean
