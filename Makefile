@@ -1,57 +1,72 @@
+#---------------------------------------------------------------------------------
+# Based on devkitPro/nds-examples templates/arm9/Makefile (libnds 2 / calico).
+# ds_rules supplies the ARM7 binary, the ndstool rule and the default icon.
+#---------------------------------------------------------------------------------
+.SUFFIXES:
+#---------------------------------------------------------------------------------
+
 ifeq ($(strip $(DEVKITARM)),)
-$(error "DEVKITARM is not set (use the devkitpro/devkitarm image)")
+$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
 endif
-ifeq ($(strip $(DEVKITPRO)),)
-$(error "DEVKITPRO is not set")
-endif
+
+GAME_TITLE     := DSi SNES
+GAME_SUBTITLE1 := SNES emulator
+GAME_SUBTITLE2 := DSi only
+
+include $(DEVKITARM)/ds_rules
 
 TARGET   := dsisnes
-SOURCES  := $(wildcard source/*.c)
-OBJECTS  := $(SOURCES:.c=.o)
-
-LIBNDS   ?= $(DEVKITPRO)/libnds
-CALICO   ?= $(DEVKITPRO)/calico
-
-# ARM7 side: stock libnds/calico ARM7 binary (audio will move here later).
-# Override on the command line if the auto-detect picks the wrong file.
-ARM7ELF  ?= $(or $(firstword $(shell find $(DEVKITPRO) -name ds7_maxmod.elf 2>/dev/null)),\
-                 $(firstword $(shell find $(DEVKITPRO) -name 'ds7*.elf' 2>/dev/null)),\
-                 $(firstword $(shell find $(DEVKITPRO) -name default.elf 2>/dev/null)))
-ICON     ?= icon.bmp
-
-# DSi-mode header flags for ndstool (same ones TWiLight Menu++/nds-bootstrap use).
-DSI_FLAGS ?= -z 80040000 -u 00030004
+BUILD    := build
+SOURCES  := source
+INCLUDES := include
 
 ARCH     := -march=armv5te -mtune=arm946e-s
-CC       := $(DEVKITARM)/bin/arm-none-eabi-gcc
-NDSTOOL  ?= $(firstword $(wildcard $(DEVKITPRO)/tools/bin/ndstool) ndstool)
-CFLAGS   := -g -Wall -O2 -ffunction-sections -fdata-sections $(ARCH) \
-            -DARM9 -D__NDS__ -Isource -I$(LIBNDS)/include -I$(CALICO)/include
-LDFLAGS  := -specs=$(CALICO)/share/ds9.specs -g $(ARCH) -Wl,-Map,$(TARGET).map
-LIBS     := -L$(LIBNDS)/lib -L$(CALICO)/lib -Wl,-u,__ds9_bootstub \
-            -Wl,--start-group -lfat -lnds9 -lcalico_ds9 -Wl,--end-group
+CFLAGS   := -g -Wall -O2 -ffunction-sections -fdata-sections \
+            $(ARCH) $(INCLUDE) -DARM9
+CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
+ASFLAGS  := -g $(ARCH)
+LDFLAGS   = -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-all: $(TARGET).nds $(TARGET)_dsmode.nds
+# order is important
+LIBS     := -lfat -lnds9
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+LIBDIRS  := $(LIBNDS) $(PORTLIBS)
 
-$(TARGET).elf: $(OBJECTS)
-	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@
+ifneq ($(BUILD),$(notdir $(CURDIR)))
 
-$(TARGET).nds: $(TARGET).elf
-	@test -n "$(ARM7ELF)" || (echo "ERROR: no ARM7 elf found under $(DEVKITPRO)"; exit 1)
-	@echo "ARM7: $(ARM7ELF)"
-	$(NDSTOOL) -c $@ -9 $< -7 $(ARM7ELF) -b $(ICON) "DSi SNES;SNES emulator;DSi only" \
-	        -g SNSD 01 "DSISNES" $(DSI_FLAGS)
+export OUTPUT  := $(CURDIR)/$(TARGET)
+export VPATH   := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
+export DEPSDIR := $(CURDIR)/$(BUILD)
 
-# Diagnostic build: same code, plain DS header (no DSi flags). It should boot and
-# show the "Not running in DSi mode" message if the toolchain/ARM7 side is fine.
-$(TARGET)_dsmode.nds: $(TARGET).elf
-	$(NDSTOOL) -c $@ -9 $< -7 $(ARM7ELF) -b $(ICON) "DSi SNES;DS-mode test;" \
-	        -g SNSD 01 "DSISNES"
+CFILES   := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+
+export LD      := $(CC)
+export OFILES  := $(CFILES:.c=.o)
+
+export INCLUDE := $(foreach dir,$(INCLUDES),-iquote $(CURDIR)/$(dir)) \
+                  $(foreach dir,$(LIBDIRS),-I$(dir)/include) \
+                  -I$(CURDIR)/$(BUILD)
+export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
+
+ifneq (,$(wildcard icon.bmp))
+export GAME_ICON := $(CURDIR)/icon.bmp
+endif
+
+.PHONY: $(BUILD) clean
+
+$(BUILD):
+	@mkdir -p $@
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 clean:
-	rm -f $(OBJECTS) $(TARGET).elf $(TARGET).nds $(TARGET)_dsmode.nds $(TARGET).map
+	@echo clean ...
+	@rm -fr $(BUILD) $(TARGET).elf $(TARGET).nds
 
-.PHONY: all clean
+else
+
+$(OUTPUT).nds: $(OUTPUT).elf $(GAME_ICON)
+$(OUTPUT).elf: $(OFILES)
+
+-include $(DEPSDIR)/*.d
+
+endif
