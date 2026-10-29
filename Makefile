@@ -26,7 +26,8 @@ NDSTOOL  ?= $(firstword $(wildcard $(DEVKITPRO)/tools/bin/ndstool) ndstool)
 CFLAGS   := -g -Wall -O2 -ffunction-sections -fdata-sections $(ARCH) \
             -DARM9 -D__NDS__ -Isource -I$(LIBNDS)/include -I$(CALICO)/include
 LDFLAGS  := -specs=$(CALICO)/share/ds9.specs -g $(ARCH) -Wl,-Map,$(TARGET).map
-LIBS     := -L$(LIBNDS)/lib -L$(CALICO)/lib -lfat -lnds9
+LIBS     := -L$(LIBNDS)/lib -L$(CALICO)/lib -Wl,-u,__ds9_bootstub \
+            -Wl,--start-group -lfat -lnds9 -lcalico_ds9 -Wl,--end-group
 
 all: $(TARGET).nds
 
