@@ -21,7 +21,8 @@ ICON     ?= $(firstword $(wildcard icon.bmp $(LIBNDS)/icon.bmp))
 DSI_FLAGS ?= -z 80040000 -u 00030004
 
 ARCH     := -march=armv5te -mtune=arm946e-s
-CC       := arm-none-eabi-gcc
+CC       := $(DEVKITARM)/bin/arm-none-eabi-gcc
+NDSTOOL  ?= $(firstword $(wildcard $(DEVKITPRO)/tools/bin/ndstool) ndstool)
 CFLAGS   := -g -Wall -O2 -ffunction-sections -fdata-sections $(ARCH) \
             -DARM9 -D__NDS__ -Isource -I$(LIBNDS)/include -I$(CALICO)/include
 LDFLAGS  := -specs=$(CALICO)/share/ds9.specs -g $(ARCH) -Wl,-Map,$(TARGET).map
@@ -36,7 +37,7 @@ $(TARGET).elf: $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) $(LIBS) -o $@
 
 $(TARGET).nds: $(TARGET).elf
-	ndstool -c $@ -9 $< -7 $(ARM7ELF) -b $(ICON) "DSi SNES;SNES emulator;DSi only" \
+	$(NDSTOOL) -c $@ -9 $< -7 $(ARM7ELF) -b $(ICON) "DSi SNES;SNES emulator;DSi only" \
 	        -g SNSD 01 "DSISNES" $(DSI_FLAGS)
 
 clean:
