@@ -8,24 +8,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: devkitpro/devkitarm:latest
+    env:
+      PATH: /opt/devkitpro/devkitARM/bin:/opt/devkitpro/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - uses: actions/checkout@v4
 
       - name: Install libnds and filesystem library
         run: dkp-pacman -S --needed --noconfirm nds-dev
 
-      - name: Show toolchain layout (helps debug the first run)
+      - name: Build (official template rules)
+        run: make
+
+      - name: Make DS-mode and DSi-mode images
         run: |
-          ls "$DEVKITPRO" || true
-          ls "$DEVKITPRO/calico/lib" "$DEVKITPRO/calico/bin" "$DEVKITPRO/libnds" 2>/dev/null || true
-
-      - name: Find ARM7 binaries
-        run: find "$DEVKITPRO" -name 'ds7*.elf' -o -name 'default.elf' -o -name '*.arm7' | head -20
-
-      - name: Build
-        run: make -j2
-        env:
-          PATH: /opt/devkitpro/devkitARM/bin:/opt/devkitpro/tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          # official build = plain DS header (diagnostic)
+          mv dsisnes.nds dsisnes_dsmode.nds
+          echo "--- ndstool help (for DSi flag reference) ---"
+          ndstool 2>&1 | head -80 || true
+          echo "--- DSi-mode image ---"
+          ndstool -c dsisnes.nds -9 dsisnes.elf \
+            -7 "$DEVKITPRO/calico/bin/ds7_maine.elf" \
+            -b icon.bmp "DSi SNES;SNES emulator;DSi only" \
+            -g SNSD 01 DSISNES -z 80040000 -u 00030004
+          echo "--- header unit code (offset 0x12) of both images ---"
+          xxd -s 0x12 -l 1 dsisnes_dsmode.nds
+          xxd -s 0x12 -l 1 dsisnes.nds
+          ls -l *.nds
 
       - uses: actions/upload-artifact@v4
         with:
